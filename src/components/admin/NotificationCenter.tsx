@@ -93,28 +93,34 @@ export default function NotificationCenter({
           </div>
 
           <div className="divide-y divide-slate-800/80 max-h-80 overflow-y-auto mt-2">
-            {notifications.map((notif) => (
-              <div
-                key={notif.id}
-                className={cn(
-                  "py-3 px-2 flex items-start space-x-3 rounded-xl transition-colors",
-                  notif.unread ? "bg-slate-900/60" : "hover:bg-slate-900/40"
-                )}
-              >
-                <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 shrink-0">
-                  {getIcon(notif.type)}
-                </div>
-                <div className="flex-1 text-xs">
-                  <div className="font-bold text-slate-200 flex items-center justify-between">
-                    <span>{notif.title}</span>
-                    <span className="text-[10px] text-slate-500 font-normal">{notif.time}</span>
-                  </div>
-                  <p className="text-slate-400 mt-1 text-[11px] leading-relaxed">
-                    {notif.description}
-                  </p>
-                </div>
+            {notifications.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-500">
+                No notifications yet.
               </div>
-            ))}
+            ) : (
+              notifications.map((notif) => (
+                <div
+                  key={notif.id}
+                  className={cn(
+                    "py-3 px-2 flex items-start space-x-3 rounded-xl transition-colors",
+                    notif.unread ? "bg-slate-900/60" : "hover:bg-slate-900/40"
+                  )}
+                >
+                  <div className="p-2 rounded-xl bg-slate-950 border border-slate-800 shrink-0">
+                    {getIcon(notif.type)}
+                  </div>
+                  <div className="flex-1 text-xs">
+                    <div className="font-bold text-slate-200 flex items-center justify-between">
+                      <span>{notif.title}</span>
+                      <span className="text-[10px] text-slate-500 font-normal">{notif.time || notif.timestamp}</span>
+                    </div>
+                    <p className="text-slate-400 mt-1 text-[11px] leading-relaxed">
+                      {notif.description || notif.message}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}

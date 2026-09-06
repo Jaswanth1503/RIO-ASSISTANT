@@ -17,20 +17,24 @@ interface AnalyticsModuleProps {
   leadCount: number;
   hotLeadCount: number;
   projectCount: number;
+  revenueTotal?: number;
 }
 
 export default function AnalyticsModule({
   leadCount,
   hotLeadCount,
   projectCount,
+  revenueTotal = 0,
 }: AnalyticsModuleProps) {
-  const conversionRate = leadCount > 0 ? Math.round((projectCount / leadCount) * 100) : 75;
-  const projectsWon = 4;
-  const projectsLost = 1;
-  const totalRevenue = 125000;
-  const avgProjectValue = Math.round(totalRevenue / projectsWon);
-  const avgResponseTime = "< 1.5 hrs";
-  const monthlyGrowth = "+32%";
+  const conversionRate = leadCount > 0 ? Math.round((projectCount / leadCount) * 100) : 0;
+  const projectsWon = projectCount;
+  const projectsLost = 0;
+  const avgProjectValue = projectsWon > 0 ? Math.round(revenueTotal / projectsWon) : 0;
+  const avgResponseTime = leadCount > 0 ? "< 1.5 hrs" : "0 hrs";
+  const monthlyGrowth = revenueTotal > 0 ? "+0%" : "0%";
+  const qualifiedRatio = leadCount > 0 ? Math.round((hotLeadCount / leadCount) * 100) : 0;
+  const winRatio = projectsWon + projectsLost > 0 ? Math.round((projectsWon / (projectsWon + projectsLost)) * 100) : 0;
+  const revenueRunRate = revenueTotal > 0 ? `₹${(revenueTotal * 12).toLocaleString("en-IN")} / yr` : "₹0 / yr";
 
   return (
     <div className="space-y-6">
@@ -61,7 +65,7 @@ export default function AnalyticsModule({
           <div className="text-2xl sm:text-3xl font-black mt-2 text-slate-100">
             {projectsWon} <span className="text-slate-500 text-lg font-normal">/ {projectsLost}</span>
           </div>
-          <span className="text-[10px] text-slate-500 mt-1 block">80% Win Ratio</span>
+          <span className="text-[10px] text-slate-500 mt-1 block">{winRatio}% Win Ratio</span>
         </div>
 
         <div className="glass-panel p-5 rounded-2xl border border-slate-800">
@@ -100,7 +104,7 @@ export default function AnalyticsModule({
         <div className="glass-panel p-5 rounded-2xl border border-slate-800">
           <div className="text-xs text-slate-400 font-medium">Qualified Leads Ratio</div>
           <div className="text-xl font-bold text-emerald-400 mt-1">
-            {leadCount > 0 ? Math.round((hotLeadCount / leadCount) * 100) : 66}%
+            {qualifiedRatio}%
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
             Percentage of prospects scoring &gt; ₹20,000 budget and urgent timeline.
@@ -109,7 +113,7 @@ export default function AnalyticsModule({
 
         <div className="glass-panel p-5 rounded-2xl border border-slate-800">
           <div className="text-xs text-slate-400 font-medium">Revenue Run Rate</div>
-          <div className="text-xl font-bold text-teal-400 mt-1">₹4.8L / yr</div>
+          <div className="text-xl font-bold text-teal-400 mt-1">{revenueRunRate}</div>
           <p className="text-[11px] text-slate-500 mt-1">
             Projected annual revenue based on active retainers and pipeline.
           </p>

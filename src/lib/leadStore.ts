@@ -5,50 +5,13 @@ import { sendLeadNotificationEmail } from "./resend";
 import { triggerVapiOutboundCall } from "./vapi";
 
 // Fallback in-memory lead repository for offline/demo operation
-const mockLeads: Lead[] = [
-  {
-    id: "demo-lead-1",
-    name: "Suresh Reddy",
-    email: "suresh.reddy@techventures.io",
-    phone: "+91 98480 22334",
-    business_name: "Reddy Infrastructure & ReadyMix",
-    project_type: "Full Stack Automation & Fleet Dashboard",
-    budget: "₹65,000",
-    timeline: "3 weeks",
-    requirements: "Need an industrial dispatch telemetry dashboard similar to Veera RMC for our mixer trucks and batch plant.",
-    lead_score: "HOT",
-    summary: "High budget commercial inquiry looking for industrial fleet automation. Decision maker ready to start.",
-    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: "demo-lead-2",
-    name: "Ananya Sharma",
-    email: "ananya@growthpulse.co",
-    phone: "+91 99887 76655",
-    business_name: "GrowthPulse Marketing",
-    project_type: "AI Chatbot & Lead Agent",
-    budget: "₹25,000",
-    timeline: "Next month",
-    requirements: "Looking for an intelligent chatbot like RIO to qualify B2B SaaS leads and book discovery calls.",
-    lead_score: "HOT",
-    summary: "Marketing agency seeking AI agent integration with booking calendar and email alerts.",
-    created_at: new Date(Date.now() - 3600000 * 18).toISOString(),
-  },
-  {
-    id: "demo-lead-3",
-    name: "Vikram Malhotra",
-    email: "vikram.m@gmail.com",
-    phone: "+91 91234 56789",
-    business_name: "Personal Brand",
-    project_type: "Portfolio Website",
-    budget: "₹12,000",
-    timeline: "Flexible",
-    requirements: "Clean personal portfolio with dark mode, blogs, and project showcase.",
-    lead_score: "WARM",
-    summary: "Standard portfolio site inquiry with moderate budget.",
-    created_at: new Date(Date.now() - 3600000 * 36).toISOString(),
-  },
-];
+const defaultMockLeads: Lead[] = [];
+
+const globalForLeads = globalThis as unknown as { __rio_mock_leads?: Lead[] };
+if (!globalForLeads.__rio_mock_leads) {
+  globalForLeads.__rio_mock_leads = [];
+}
+const mockLeads: Lead[] = globalForLeads.__rio_mock_leads;
 
 export async function saveLead(rawLead: Partial<Lead>): Promise<Lead> {
   // Score the lead using the qualification engine
@@ -122,11 +85,11 @@ export async function getAllLeads(): Promise<Lead[]> {
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         return data as Lead[];
       }
     } catch (err) {
-      console.error("Error fetching leads from Supabase, returning mock dataset:", err);
+      console.error("Error fetching leads from Supabase, returning local store:", err);
     }
   }
   return mockLeads;

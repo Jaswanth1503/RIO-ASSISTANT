@@ -13,7 +13,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Lead } from "@/lib/validations";
-import { Client, Project, Task, Meeting } from "@/lib/businessStore";
+import { Client, Project, Task, Meeting, Proposal } from "@/lib/businessStore";
 import { AdminTab } from "./AdminSidebar";
 
 interface GlobalSearchModalProps {
@@ -25,6 +25,7 @@ interface GlobalSearchModalProps {
   projects: Project[];
   tasks: Task[];
   meetings: Meeting[];
+  proposals?: Proposal[];
 }
 
 export default function GlobalSearchModal({
@@ -36,6 +37,7 @@ export default function GlobalSearchModal({
   projects,
   tasks,
   meetings,
+  proposals = [],
 }: GlobalSearchModalProps) {
   const [query, setQuery] = useState("");
 
@@ -69,25 +71,25 @@ export default function GlobalSearchModal({
   const matchingProjects = q
     ? projects.filter(
         (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.client_name.toLowerCase().includes(q) ||
-          p.project_type.toLowerCase().includes(q)
+          (p.project_name || p.name || "").toLowerCase().includes(q) ||
+          (p.client_name || "").toLowerCase().includes(q) ||
+          (p.description || "").toLowerCase().includes(q)
       )
     : [];
 
   const matchingClients = q
     ? clients.filter(
         (c) =>
-          c.name.toLowerCase().includes(q) ||
-          c.company.toLowerCase().includes(q) ||
-          c.email.toLowerCase().includes(q)
+          (c.client_name || c.name || "").toLowerCase().includes(q) ||
+          (c.company || "").toLowerCase().includes(q) ||
+          (c.email || "").toLowerCase().includes(q)
       )
     : [];
 
   const matchingTasks = q
     ? tasks.filter(
         (t) =>
-          t.name.toLowerCase().includes(q) ||
+          (t.title || t.name || "").toLowerCase().includes(q) ||
           (t.project_name && t.project_name.toLowerCase().includes(q))
       )
     : [];
@@ -95,9 +97,18 @@ export default function GlobalSearchModal({
   const matchingMeetings = q
     ? meetings.filter(
         (m) =>
-          m.client_name.toLowerCase().includes(q) ||
-          m.notes.toLowerCase().includes(q) ||
-          m.meeting_type.toLowerCase().includes(q)
+          (m.client_name || "").toLowerCase().includes(q) ||
+          (m.notes || "").toLowerCase().includes(q) ||
+          (m.project_type || (m as any).meeting_type || "").toLowerCase().includes(q)
+      )
+    : [];
+
+  const matchingProposals = q && proposals
+    ? proposals.filter(
+        (pr) =>
+          (pr.project_name || "").toLowerCase().includes(q) ||
+          (pr.client_name || "").toLowerCase().includes(q) ||
+          (pr.scope || "").toLowerCase().includes(q)
       )
     : [];
 
@@ -106,7 +117,8 @@ export default function GlobalSearchModal({
     matchingProjects.length +
     matchingClients.length +
     matchingTasks.length +
-    matchingMeetings.length;
+    matchingMeetings.length +
+    matchingProposals.length;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-start justify-center pt-20 p-4">
@@ -295,6 +307,36 @@ export default function GlobalSearchModal({
                           </div>
                         </div>
                         <span className="text-[10px] text-emerald-400 font-bold">{m.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Proposals */}
+              {matchingProposals.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center">
+                    <FileText className="w-3.5 h-3.5 mr-1 text-emerald-400" /> Proposals (
+                    {matchingProposals.length})
+                  </div>
+                  <div className="space-y-1.5">
+                    {matchingProposals.map((pr) => (
+                      <div
+                        key={pr.id}
+                        onClick={() => {
+                          onNavigate("proposals", pr.id);
+                          onClose();
+                        }}
+                        className="p-2.5 rounded-xl bg-slate-950/70 hover:bg-slate-800 border border-slate-800/80 cursor-pointer flex items-center justify-between transition-colors"
+                      >
+                        <div>
+                          <div className="font-bold text-xs text-slate-100">{pr.project_name}</div>
+                          <div className="text-[11px] text-slate-400">{pr.client_name} • {pr.timeline}</div>
+                        </div>
+                        <span className="text-xs text-emerald-400 font-bold">
+                          ₹{pr.cost.toLocaleString("en-IN")}
+                        </span>
                       </div>
                     ))}
                   </div>

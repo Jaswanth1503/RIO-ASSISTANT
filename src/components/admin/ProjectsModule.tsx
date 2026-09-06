@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Project,
   ProjectCategory,
@@ -20,11 +20,17 @@ import {
   DollarSign,
   Calendar,
   X,
+  Play,
+  Pause,
+  XCircle,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ProjectsModuleProps {
   projects: Project[];
+  onCompleteProject?: (project: Project) => void;
+  onUpdateProject?: (project: Project) => void;
 }
 
 const PHASES: ProjectPhase[] = [
@@ -37,11 +43,19 @@ const PHASES: ProjectPhase[] = [
   "Support",
 ];
 
-export default function ProjectsModule({ projects: initialProjects }: ProjectsModuleProps) {
+export default function ProjectsModule({
+  projects: initialProjects,
+  onCompleteProject,
+  onUpdateProject,
+}: ProjectsModuleProps) {
   const [projects, setProjects] = useState<Project[]>(initialProjects);
-  const [activeTab, setActiveTab] = useState<"ALL" | "Active" | "Upcoming" | "Completed" | "On Hold">("Active");
+  const [activeTab, setActiveTab] = useState<"ALL" | "Active" | "Upcoming" | "Completed" | "On Hold" | "Cancelled">("Active");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  useEffect(() => {
+    setProjects(initialProjects);
+  }, [initialProjects]);
 
   // New Project State
   const [newProject, setNewProject] = useState({
@@ -62,203 +76,270 @@ export default function ProjectsModule({ projects: initialProjects }: ProjectsMo
   });
 
   const handleUpdatePhase = (projectId: string, newPhase: ProjectPhase) => {
-    const newProgress = PHASE_PROGRESS_MAP[newPhase];
-    setProjects((prev) =>
-      prev.map((p) =>
-        p.id === projectId
-          ? {
-              ...p,
-              phase: newPhase,
-              progress_pct: newProgress,
-              status: newPhase === "Support" ? "Completed" : p.status,
-            }
-          : p
-      )
-    );
+    const newProgress = PHASE_PROGRESS_MAP[newPhase] || 15;
+    const isNowCompleted = newPhase === "Support" && newProgress === 100;
+
+    const updatedList = projects.map((p) => {
+      if (p.id === projectId) {
+        const updated: Project = {
+          ...p,
+          phase: newPhase,
+          current_phase: newPhase,
+          progress_pct: newProgress,
+          progress: newProgress,
+          status: isNowCompleted ? "Completed" : p.status,
+        };
+        if (isNowCompleted && onCompleteProject) {
+          onCompleteProject(updated);
+        }
+        if (onUpdateProject) onUpdateProject(updated);
+        return updated;
+      }
+      return p;
+    });
+
+    setProjects(updatedList);
     if (selectedProject && selectedProject.id === projectId) {
       setSelectedProject({
         ...selectedProject,
         phase: newPhase,
+        current_phase: newPhase,
         progress_pct: newProgress,
+        progress: newProgress,
+        status: isNowCompleted ? "Completed" : selectedProject.status,
       });
     }
   };
 
-  const handleAddProject = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProject.name || !newProject.client_name) return;
+  const handleUpdateStatus = (projectId: string, newStatus: ProjectCategory) => {
+    const updatedList = projects.map((p) => {
+      if (p.id === projectId) {
+        const isNowCompleted = newStatus === "Completed";
+        const updated: Project = {
+          ...p,
+          status: newStatus,
+          progress: isNowCompleted ? 100 : p.progress || p.progress_pct || 15,
+          progress_pct: isNowCompleted ? 100 : p.progress || p.progress_pct || 15,
+          current_phase: isNowCompleted ? "Support" : p.current_phase || p.phase || "Discovery",
+          phase: isNowCompleted ? "Support" : p.current_phase || p.phase || "Discovery",
+        };
+        if (isNowCompleted && onCompleteProject) {
+          onCompleteProject(updated);
+        }
+        if (onUpdateProject) onUpdateProject(updated);
+        return updated;
+      }
+      return p;
+    });
 
+    setProjects(updatedList);
+    if (selectedProject && selectedProject.id === projectId) {
+      setSelectedProject({
+        ...selectedProject,
+        status: newStatus,
+        progress: newStatus === "Completed" ? 100 : selectedProject.progress,
+        progress_pct: newStatus === "Completed" ? 100 : selectedProject.progress_pct,
+      });
+    }
+  };
+
+  const handleCreateProject = (e: React.FormEvent) => {
+    e.preventDefault();
     const created: Project = {
-      id: `prj-${Date.now()}`,
+      id: `proj-${Date.now()}`,
+      project_id: `PROJ-${Date.now().toString().slice(-4)}`,
       name: newProject.name,
+      project_name: newProject.name,
       client_name: newProject.client_name,
-      project_type: newProject.project_type,
-      description: newProject.description,
+      description: newProject.description || "Production system delivery.",
       budget: Number(newProject.budget),
       deadline: newProject.deadline,
       start_date: newProject.start_date,
       progress_pct: PHASE_PROGRESS_MAP[newProject.phase],
+      progress: PHASE_PROGRESS_MAP[newProject.phase],
       status: "Active",
       phase: newProject.phase,
+      current_phase: newProject.phase,
       priority: newProject.priority,
-      assigned_resources: "Annu Jaswanth",
       risk_status: "Low",
-      probability_pct: 100,
-      notes: "Project initiated through business operations dashboard.",
+      notes: "Newly launched project.",
+      created_at: new Date().toISOString(),
     };
 
     setProjects([created, ...projects]);
+    if (onUpdateProject) onUpdateProject(created);
     setIsAddModalOpen(false);
   };
 
   const calculateDaysRemaining = (deadlineStr: string) => {
-    const now = new Date().getTime();
-    const target = new Date(deadlineStr).getTime();
-    const diff = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
-    return diff > 0 ? `${diff} days left` : "Deadline today";
+    if (!deadlineStr) return "Ongoing";
+    const diff = new Date(deadlineStr).getTime() - new Date().getTime();
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    if (days < 0) return `${Math.abs(days)}d Overdue`;
+    if (days === 0) return "Due Today";
+    return `${days} days left`;
   };
 
   return (
     <div className="space-y-6">
-      {/* Header & Sub-Tabs */}
+      {/* Top Header & Actions */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-100">Project Operations Hub</h2>
+          <h2 className="text-xl font-bold text-slate-100 flex items-center space-x-2">
+            <Briefcase className="w-5 h-5 text-emerald-400" />
+            <span>Project Management & Phase Tracker</span>
+          </h2>
           <p className="text-xs text-slate-400">
-            Track active engineering deliverables, upcoming pipelines, and completed architectures.
+            Lifecycle phase: Proposal Accepted → <strong className="text-emerald-400">Project Execution</strong> → Completion
           </p>
         </div>
 
-        <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
-          <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1">
-            {(["Active", "Upcoming", "Completed", "ALL"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={cn(
-                  "text-xs px-3 py-1.5 rounded-lg font-semibold transition-all",
-                  activeTab === tab
-                    ? "bg-emerald-500 text-slate-950 font-bold shadow-sm"
-                    : "text-slate-400 hover:text-slate-200"
-                )}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New Project</span>
-          </button>
-        </div>
+        <button
+          onClick={() => setIsAddModalOpen(true)}
+          className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center space-x-2 shadow-lg transition-all"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Launch Project</span>
+        </button>
       </div>
 
-      {/* Projects Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProjects.map((p) => (
-          <div
-            key={p.id}
-            onClick={() => setSelectedProject(p)}
-            className="glass-panel rounded-3xl border border-slate-800 p-6 flex flex-col justify-between hover:border-emerald-500/40 transition-all cursor-pointer group bg-slate-950/70"
+      {/* Filter Tabs */}
+      <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+        {(["ALL", "Active", "Upcoming", "Completed", "On Hold", "Cancelled"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`text-xs px-3.5 py-1.5 rounded-xl font-medium transition-all ${
+              activeTab === tab
+                ? "bg-emerald-500 text-slate-950 font-bold"
+                : "bg-slate-900 text-slate-400 border border-slate-800 hover:text-slate-200"
+            }`}
           >
-            <div>
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-                    {p.project_type}
-                  </span>
-                  <h3 className="text-base font-bold text-slate-100 group-hover:text-emerald-400 transition-colors mt-0.5">
-                    {p.name}
-                  </h3>
-                  <div className="text-xs text-slate-400 mt-0.5">Client: {p.client_name}</div>
-                </div>
-
-                <span
-                  className={cn(
-                    "text-[10px] px-2 py-0.5 rounded-full font-bold border",
-                    p.status === "Active"
-                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                      : p.status === "Upcoming"
-                      ? "bg-cyan-500/15 text-cyan-400 border-cyan-500/30"
-                      : "bg-slate-800 text-slate-300 border-slate-700"
-                  )}
-                >
-                  {p.status}
-                </span>
-              </div>
-
-              {/* Progress Bar & Phase */}
-              <div className="mt-5 space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Current Phase: <strong className="text-slate-200">{p.phase}</strong></span>
-                  <span className="font-bold text-emerald-400">{p.progress_pct}%</span>
-                </div>
-                <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-                  <div
-                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500 rounded-full"
-                    style={{ width: `${p.progress_pct}%` }}
-                  ></div>
-                </div>
-              </div>
-
-              {/* Phase Stepper Pills */}
-              <div className="mt-4 flex flex-wrap gap-1">
-                {PHASES.map((ph, idx) => {
-                  const isCurrent = p.phase === ph;
-                  const isPast = PHASE_PROGRESS_MAP[p.phase] >= PHASE_PROGRESS_MAP[ph];
-                  return (
-                    <span
-                      key={ph}
-                      className={cn(
-                        "text-[9px] px-1.5 py-0.5 rounded font-medium",
-                        isCurrent
-                          ? "bg-emerald-500 text-slate-950 font-bold"
-                          : isPast
-                          ? "bg-slate-800 text-emerald-400"
-                          : "bg-slate-900/60 text-slate-600"
-                      )}
-                    >
-                      {ph}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Footer Stats */}
-            <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs">
-              <div>
-                <span className="text-slate-500 text-[10px] block">Budget</span>
-                <span className="text-emerald-400 font-extrabold text-sm">
-                  ₹{p.budget.toLocaleString("en-IN")}
-                </span>
-              </div>
-
-              <div className="text-right">
-                <span className="text-slate-500 text-[10px] block">Timeline</span>
-                <span className="text-slate-300 font-medium text-xs">
-                  {calculateDaysRemaining(p.deadline)}
-                </span>
-              </div>
-            </div>
-          </div>
+            {tab}
+          </button>
         ))}
       </div>
 
-      {/* Project Detail & Phase Updating Modal */}
+      {/* Projects Grid */}
+      {filteredProjects.length === 0 ? (
+        <div className="glass-panel p-12 rounded-2xl border border-slate-800 text-center text-slate-500 text-sm">
+          No projects available.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredProjects.map((p) => {
+          const currentPhase = p.current_phase || p.phase || "Discovery";
+          const currentProgress = p.progress ?? p.progress_pct ?? 15;
+          const projectName = p.project_name || p.name;
+          return (
+            <div
+              key={p.id}
+              onClick={() => setSelectedProject(p)}
+              className="glass-panel p-5 rounded-2xl border border-slate-800 hover:border-emerald-500/30 transition-all cursor-pointer flex flex-col justify-between group space-y-4 shadow-xl"
+            >
+              <div>
+                <div className="flex items-start justify-between">
+                  <span className="text-[10px] font-mono text-slate-500 uppercase font-bold tracking-wider">
+                    {p.project_id || "PROJECT"}
+                  </span>
+                  <div className="flex items-center space-x-1.5">
+                    <span
+                      className={cn(
+                        "text-[9px] px-2 py-0.5 rounded-full font-bold uppercase",
+                        p.risk_status === "High"
+                          ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                          : p.risk_status === "Medium"
+                          ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                          : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                      )}
+                    >
+                      {p.risk_status || "Low"} Risk
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-slate-800 text-slate-300">
+                      {p.status}
+                    </span>
+                  </div>
+                </div>
+
+                <h3 className="text-sm font-bold text-slate-100 group-hover:text-emerald-400 transition-colors mt-2">
+                  {projectName}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">{p.client_name}</p>
+
+                {/* Progress Bar & Phase */}
+                <div className="mt-4 space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400 font-medium">
+                      Stage: <strong className="text-emerald-400">{currentPhase}</strong>
+                    </span>
+                    <span className="font-mono text-emerald-400 font-bold">{currentProgress}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500 rounded-full"
+                      style={{ width: `${currentProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Phase Stepper Pills */}
+                <div className="mt-3 flex flex-wrap gap-1">
+                  {PHASES.map((ph) => {
+                    const isCurrent = currentPhase === ph;
+                    const isPast = PHASE_PROGRESS_MAP[currentPhase] >= PHASE_PROGRESS_MAP[ph];
+                    return (
+                      <span
+                        key={ph}
+                        className={cn(
+                          "text-[9px] px-1.5 py-0.5 rounded font-medium",
+                          isCurrent
+                            ? "bg-emerald-500 text-slate-950 font-bold"
+                            : isPast
+                            ? "bg-slate-800 text-emerald-400"
+                            : "bg-slate-900/60 text-slate-600"
+                        )}
+                      >
+                        {ph}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Footer Stats */}
+              <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-slate-500 text-[10px] block">Budget</span>
+                  <span className="text-emerald-400 font-extrabold text-sm">
+                    ₹{p.budget.toLocaleString("en-IN")}
+                  </span>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-slate-500 text-[10px] block">Timeline</span>
+                  <span className="text-slate-300 font-medium text-xs">
+                    {calculateDaysRemaining(p.deadline)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      )}
+
+      {/* Project Detail Modal with Lifecycle Actions */}
       {selectedProject && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl max-h-[90vh] overflow-y-auto space-y-6">
             <div className="flex items-start justify-between pb-4 border-b border-slate-800">
               <div>
                 <span className="text-xs uppercase font-bold text-emerald-400">
-                  {selectedProject.project_type}
+                  {selectedProject.project_id || "PROJECT"}
                 </span>
-                <h3 className="text-xl font-bold text-slate-100 mt-1">{selectedProject.name}</h3>
+                <h3 className="text-xl font-bold text-slate-100 mt-1">
+                  {selectedProject.project_name || selectedProject.name}
+                </h3>
                 <p className="text-xs text-slate-400">Client: {selectedProject.client_name}</p>
               </div>
               <button
@@ -269,159 +350,178 @@ export default function ProjectsModule({ projects: initialProjects }: ProjectsMo
               </button>
             </div>
 
-            {/* Interactive Phase Updater */}
-            <div className="my-6">
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-500 block">Budget</span>
+                <span className="text-emerald-400 font-bold text-sm">
+                  ₹{selectedProject.budget.toLocaleString("en-IN")}
+                </span>
+              </div>
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-500 block">Progress</span>
+                <span className="text-slate-200 font-bold text-sm">
+                  {selectedProject.progress ?? selectedProject.progress_pct ?? 15}%
+                </span>
+              </div>
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-500 block">Deadline</span>
+                <span className="text-slate-300 font-medium text-[11px] block">
+                  {selectedProject.deadline}
+                </span>
+              </div>
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-500 block">Status</span>
+                <span className="text-emerald-400 font-bold text-xs">{selectedProject.status}</span>
+              </div>
+            </div>
+
+            {/* Interactive Phase Stepper */}
+            <div>
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-                Update Project Stage (Automatically recalculates progress)
+                Update Project Stage (Auto-calculates Progress %)
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {PHASES.map((ph) => {
-                  const isSelected = selectedProject.phase === ph;
+                  const currentPh = selectedProject.current_phase || selectedProject.phase;
+                  const isSelected = currentPh === ph;
                   return (
                     <button
                       key={ph}
                       onClick={() => handleUpdatePhase(selectedProject.id, ph)}
                       className={cn(
-                        "p-2.5 rounded-xl text-xs font-semibold border transition-all text-center",
+                        "p-2 rounded-xl text-left border transition-all text-xs",
                         isSelected
-                          ? "bg-emerald-500 text-slate-950 font-bold border-emerald-400 shadow-md"
-                          : "bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700"
+                          ? "bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold"
+                          : "bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200"
                       )}
                     >
-                      <div>{ph}</div>
-                      <span className="text-[10px] opacity-75">{PHASE_PROGRESS_MAP[ph]}%</span>
+                      <div className="font-semibold">{ph}</div>
+                      <div className="text-[10px] opacity-70">{PHASE_PROGRESS_MAP[ph]}% Progress</div>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Description & Overview */}
-            <div className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <span className="text-slate-500 block">Total Budget</span>
-                  <span className="text-emerald-400 font-bold text-sm">
-                    ₹{selectedProject.budget.toLocaleString("en-IN")}
-                  </span>
-                </div>
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <span className="text-slate-500 block">Start Date</span>
-                  <span className="text-slate-200 font-medium">{selectedProject.start_date}</span>
-                </div>
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <span className="text-slate-500 block">Deadline</span>
-                  <span className="text-slate-200 font-medium">{selectedProject.deadline}</span>
-                </div>
-                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <span className="text-slate-500 block">Risk Status</span>
-                  <span className="text-emerald-400 font-bold">{selectedProject.risk_status}</span>
-                </div>
+            {/* Phase 4 Actions: Start, Pause, Resume, Complete, Cancel */}
+            <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center space-x-2">
+                {selectedProject.status !== "Active" && (
+                  <button
+                    onClick={() => handleUpdateStatus(selectedProject.id, "Active")}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30 text-xs font-semibold flex items-center space-x-1.5"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    <span>{selectedProject.status === "On Hold" ? "Resume Project" : "Start Project"}</span>
+                  </button>
+                )}
+                {selectedProject.status === "Active" && (
+                  <button
+                    onClick={() => handleUpdateStatus(selectedProject.id, "On Hold")}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30 text-xs font-semibold flex items-center space-x-1.5"
+                  >
+                    <Pause className="w-3.5 h-3.5" />
+                    <span>Pause Project</span>
+                  </button>
+                )}
+                {selectedProject.status !== "Cancelled" && (
+                  <button
+                    onClick={() => handleUpdateStatus(selectedProject.id, "Cancelled")}
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 text-xs font-semibold flex items-center space-x-1.5"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    <span>Cancel Project</span>
+                  </button>
+                )}
               </div>
 
-              <div>
-                <h4 className="font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                  Architecture & Scope Notes
-                </h4>
-                <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 text-slate-300 leading-relaxed">
-                  {selectedProject.description || selectedProject.notes}
-                </div>
-              </div>
+              {selectedProject.status !== "Completed" && (
+                <button
+                  onClick={() => {
+                    handleUpdateStatus(selectedProject.id, "Completed");
+                    setSelectedProject(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center space-x-1.5 shadow-lg"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Complete Project (100%) →</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Add Project Modal */}
+      {/* Launch New Project Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <h3 className="text-lg font-bold text-slate-100">Create New Project</h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+          <div className="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-slate-100">Launch New Project</h3>
 
-            <form onSubmit={handleAddProject} className="space-y-4 my-6 text-xs">
+            <form onSubmit={handleCreateProject} className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Project Name *</label>
+                <label className="block text-slate-400 mb-1">Project Name</label>
                 <input
                   type="text"
                   required
+                  placeholder="e.g. AI Crop Disease Detection"
                   value={newProject.name}
                   onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                  placeholder="e.g. AI Customer Concierge"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Client Name *</label>
+                  <label className="block text-slate-400 mb-1">Client Name</label>
                   <input
                     type="text"
                     required
+                    placeholder="e.g. PestRisk Agriculture"
                     value={newProject.client_name}
                     onChange={(e) => setNewProject({ ...newProject, client_name: e.target.value })}
-                    placeholder="e.g. Ananya Sharma"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Budget (INR) *</label>
+                  <label className="block text-slate-400 mb-1">Budget (INR ₹)</label>
                   <input
                     type="number"
                     required
                     value={newProject.budget}
                     onChange={(e) => setNewProject({ ...newProject, budget: Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={newProject.start_date}
-                    onChange={(e) => setNewProject({ ...newProject, start_date: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Target Deadline</label>
-                  <input
-                    type="date"
-                    value={newProject.deadline}
-                    onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-slate-300 font-semibold mb-1">Initial Phase</label>
-                <select
-                  value={newProject.phase}
-                  onChange={(e) => setNewProject({ ...newProject, phase: e.target.value as ProjectPhase })}
+                <label className="block text-slate-400 mb-1">Deadline Date</label>
+                <input
+                  type="date"
+                  required
+                  value={newProject.deadline}
+                  onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200"
-                >
-                  {PHASES.map((ph) => (
-                    <option key={ph} value={ph}>
-                      {ph} ({PHASE_PROGRESS_MAP[ph]}%)
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
-              <button
-                type="submit"
-                className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg transition-all"
-              >
-                Add Project to Operations
-              </button>
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-3 py-1.5 rounded-xl text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold"
+                >
+                  Launch Project
+                </button>
+              </div>
             </form>
           </div>
         </div>

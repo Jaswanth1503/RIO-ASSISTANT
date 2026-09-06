@@ -16,6 +16,8 @@ import {
   Shield,
   Bot,
   UserCheck,
+  FileText,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,11 +26,13 @@ export type AdminTab =
   | "leads"
   | "followups"
   | "clients"
+  | "proposals"
   | "projects"
   | "revenue"
   | "meetings"
   | "tasks"
   | "analytics"
+  | "assistant"
   | "settings";
 
 interface AdminSidebarProps {
@@ -42,6 +46,7 @@ interface AdminSidebarProps {
     activeProjects: number;
     tasks: number;
     meetings: number;
+    proposals?: number;
   };
 }
 
@@ -70,7 +75,6 @@ export default function AdminSidebar({
       label: "Follow-Ups",
       icon: Clock,
       badge: counts.followups > 0 ? counts.followups : null,
-      badgeColor: "bg-amber-500/20 text-amber-400 border border-amber-500/30",
     },
     {
       id: "clients" as AdminTab,
@@ -79,11 +83,16 @@ export default function AdminSidebar({
       badge: null,
     },
     {
+      id: "proposals" as AdminTab,
+      label: "Proposals",
+      icon: FileText,
+      badge: counts.proposals && counts.proposals > 0 ? counts.proposals : null,
+    },
+    {
       id: "projects" as AdminTab,
       label: "Projects",
       icon: Briefcase,
       badge: counts.activeProjects > 0 ? counts.activeProjects : null,
-      badgeColor: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30",
     },
     {
       id: "revenue" as AdminTab,
@@ -102,7 +111,12 @@ export default function AdminSidebar({
       label: "Tasks",
       icon: CheckSquare,
       badge: counts.tasks > 0 ? counts.tasks : null,
-      badgeColor: "bg-red-500/20 text-red-400 border border-red-500/30",
+    },
+    {
+      id: "assistant" as AdminTab,
+      label: "RIO Assistant",
+      icon: Bot,
+      badge: "AI",
     },
     {
       id: "analytics" as AdminTab,
@@ -121,63 +135,44 @@ export default function AdminSidebar({
   return (
     <aside
       className={cn(
-        "relative flex flex-col justify-between bg-slate-950 border-r border-slate-800 transition-all duration-300 select-none z-30 shrink-0",
-        isCollapsed ? "w-16" : "w-64"
+        "bg-slate-950/95 border-r border-slate-800 transition-all duration-300 flex flex-col justify-between z-30 shrink-0 select-none",
+        isCollapsed ? "w-16 sm:w-20" : "w-60 sm:w-64"
       )}
     >
-      {/* Top Brand area */}
+      {/* Sidebar Header */}
       <div>
-        <div className="h-20 flex items-center justify-between px-4 border-b border-slate-800/80">
+        <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800">
           {!isCollapsed && (
-            <div className="flex items-center space-x-2.5 overflow-hidden">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center font-black text-slate-950 text-xs shadow-md shrink-0">
-                RIO
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold text-sm shadow-md">
+                R
               </div>
-              <div className="leading-tight truncate">
-                <span className="font-extrabold text-sm text-slate-100 block truncate">
-                  Annu Jaswanth
-                </span>
-                <span className="text-[10px] text-emerald-400 font-semibold tracking-wide uppercase">
-                  Business OS
+              <div>
+                <span className="font-extrabold text-sm text-slate-100 tracking-tight">RIO</span>
+                <span className="text-[10px] text-emerald-400 font-bold block leading-none">
+                  BUSINESS OS
                 </span>
               </div>
             </div>
           )}
 
           {isCollapsed && (
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center font-black text-slate-950 text-xs mx-auto shadow-md">
-              RIO
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold text-sm mx-auto shadow-md">
+              R
             </div>
           )}
 
-          {/* Collapse toggle button */}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className={cn(
-              "p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors",
-              isCollapsed && "hidden"
-            )}
-            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            className="hidden sm:flex text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-900 transition-colors"
+            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            <ChevronLeft className="w-4 h-4" />
+            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
         </div>
 
-        {/* Collapsed expander trigger */}
-        {isCollapsed && (
-          <div className="text-center py-2 border-b border-slate-800/50">
-            <button
-              onClick={() => setIsCollapsed(false)}
-              className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800"
-              title="Expand Sidebar"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        {/* Navigation list */}
-        <nav className="p-3 space-y-1">
+        {/* Navigation Items */}
+        <nav className="p-2 space-y-1 overflow-y-auto max-h-[calc(100vh-8rem)]">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -185,30 +180,33 @@ export default function AdminSidebar({
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                title={isCollapsed ? item.label : undefined}
                 className={cn(
-                  "w-full flex items-center rounded-xl text-xs font-semibold transition-all group py-2.5",
-                  isCollapsed ? "justify-center px-0" : "justify-between px-3",
+                  "w-full flex items-center rounded-xl text-xs font-semibold transition-all relative group",
+                  isCollapsed ? "justify-center p-3" : "px-3.5 py-2.5 space-x-3",
                   isActive
-                    ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-bold shadow-sm"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent"
+                    ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/60"
                 )}
+                title={isCollapsed ? item.label : undefined}
               >
-                <div className="flex items-center space-x-3 truncate">
-                  <Icon
-                    className={cn(
-                      "w-4 h-4 shrink-0 transition-colors",
-                      isActive ? "text-emerald-400" : "text-slate-400 group-hover:text-slate-200"
-                    )}
-                  />
-                  {!isCollapsed && <span className="truncate">{item.label}</span>}
-                </div>
+                <Icon
+                  className={cn(
+                    "w-4 h-4 shrink-0 transition-transform group-hover:scale-110",
+                    isActive ? "text-emerald-400" : "text-slate-400"
+                  )}
+                />
+
+                {!isCollapsed && <span className="truncate">{item.label}</span>}
 
                 {!isCollapsed && item.badge !== null && (
                   <span
                     className={cn(
-                      "text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-2",
-                      item.badgeColor || "bg-slate-800 text-slate-300 border border-slate-700"
+                      "ml-auto text-[10px] px-2 py-0.5 rounded-full font-bold",
+                      isActive
+                        ? "bg-emerald-500 text-slate-950"
+                        : item.badge === "AI"
+                        ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                        : "bg-slate-800 text-slate-300 border border-slate-700"
                     )}
                   >
                     {item.badge}
@@ -220,23 +218,27 @@ export default function AdminSidebar({
         </nav>
       </div>
 
-      {/* Bottom Profile Summary */}
+      {/* Footer Profile */}
       <div className="p-3 border-t border-slate-800/80">
         {!isCollapsed ? (
-          <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center space-x-2.5">
-            <div className="h-7 w-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs shrink-0 border border-emerald-500/30">
+          <div className="flex items-center space-x-3 p-2 rounded-xl bg-slate-900/50 border border-slate-800/80">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center font-bold text-xs text-emerald-400 shrink-0">
               AJ
             </div>
-            <div className="overflow-hidden leading-tight text-left">
-              <span className="text-xs font-bold text-slate-200 block truncate">Annu Jaswanth</span>
-              <span className="text-[10px] text-slate-500 truncate block">AI & Full Stack</span>
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-slate-200 truncate">Annu Jaswanth</div>
+              <div className="text-[10px] text-emerald-400/90 truncate flex items-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block mr-1.5 animate-pulse"></span>
+                Executive Mode
+              </div>
             </div>
           </div>
         ) : (
-          <div className="flex justify-center">
-            <div className="h-7 w-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs border border-emerald-500/30">
-              AJ
-            </div>
+          <div
+            className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center font-bold text-xs text-emerald-400 mx-auto"
+            title="Annu Jaswanth (Executive Mode)"
+          >
+            AJ
           </div>
         )}
       </div>

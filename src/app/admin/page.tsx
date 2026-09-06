@@ -38,6 +38,8 @@ import MeetingsModule from "@/components/admin/MeetingsModule";
 import AnalyticsModule from "@/components/admin/AnalyticsModule";
 import ClientsModule from "@/components/admin/ClientsModule";
 import SettingsModule from "@/components/admin/SettingsModule";
+import ProposalsModule from "@/components/admin/ProposalsModule";
+import RioBusinessAssistant from "@/components/admin/RioBusinessAssistant";
 import {
   initialClients,
   initialProjects,
@@ -47,6 +49,15 @@ import {
   initialCommunications,
   initialRevenues,
   initialNotifications,
+  initialProposals,
+  initialTimelineEvents,
+  convertMeetingToProposalDraft,
+  convertProposalToProjectLifecycle,
+  completeProjectLifecycle,
+  Proposal,
+  TimelineEvent,
+  Meeting,
+  Project,
 } from "@/lib/businessStore";
 
 export default function AdminDashboardPage() {
@@ -68,11 +79,13 @@ export default function AdminDashboardPage() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [callStatusNotice, setCallStatusNotice] = useState<string | null>(null);
 
-  // Operational State
+  // Operational Lifecycle State
   const [clients, setClients] = useState(initialClients);
   const [projects, setProjects] = useState(initialProjects);
   const [tasks, setTasks] = useState(initialTasks);
   const [meetings, setMeetings] = useState(initialMeetings);
+  const [proposals, setProposals] = useState<Proposal[]>(initialProposals);
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>(initialTimelineEvents);
   const [followUps, setFollowUps] = useState(initialFollowUps);
   const [communications, setCommunications] = useState(initialCommunications);
   const [revenues, setRevenues] = useState(initialRevenues);
@@ -118,6 +131,67 @@ export default function AdminDashboardPage() {
       const data = await res.json();
       if (data.leads) {
         setLeads(data.leads);
+
+        // Synchronize any AI consultation call leads directly into Meetings & Clients modules
+        const callLeads = data.leads.filter((l: Lead) =>
+          l.requirements?.includes("Scheduled Direct AI Call") || l.timeline?.includes("AI Consultation Call")
+        );
+
+        if (callLeads.length > 0) {
+          setMeetings((prevMeetings) => {
+            const existingIds = new Set(prevMeetings.map((m) => m.lead_id || m.id));
+            const newMeetings: Meeting[] = [];
+            for (const cl of callLeads) {
+              if (!existingIds.has(cl.id) && !existingIds.has(`meet-${cl.id}`)) {
+                newMeetings.push({
+                  id: `meet-${cl.id}`,
+                  meeting_id: `MTG-${cl.id.slice(-4)}`,
+                  client_id: `cli-${cl.id}`,
+                  lead_id: cl.id,
+                  client_name: cl.name,
+                  email: cl.email,
+                  phone: cl.phone,
+                  company: cl.business_name || "Direct Client",
+                  project_type: cl.project_type,
+                  budget: cl.budget || "₹20,000+",
+                  description: `AI Consultation Call: ${cl.project_type}`,
+                  meeting_date: cl.created_at ? cl.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
+                  meeting_time: "Immediate / Scheduled",
+                  meeting_mode: "Autonomous AI Phone Call (RIO)",
+                  meeting_status: "Scheduled",
+                  status: "Scheduled",
+                  notes: cl.requirements || "Inbound request for autonomous RIO consultation call.",
+                  created_at: cl.created_at || new Date().toISOString(),
+                });
+              }
+            }
+            return newMeetings.length > 0 ? [...newMeetings, ...prevMeetings] : prevMeetings;
+          });
+
+          setClients((prevClients) => {
+            const existingEmails = new Set(prevClients.map((c) => c.email));
+            const newClients: typeof prevClients = [];
+            for (const cl of callLeads) {
+              if (!existingEmails.has(cl.email)) {
+                newClients.push({
+                  id: `cli-${cl.id}`,
+                  client_name: cl.name,
+                  name: cl.name,
+                  company: cl.business_name || "Direct Client",
+                  email: cl.email,
+                  phone: cl.phone,
+                  address: "India",
+                  status: "Lead" as const,
+                  notes: `Booked Autonomous AI Phone Call for: ${cl.project_type}`,
+                  total_revenue: 0,
+                  project_count: 0,
+                  created_at: cl.created_at || new Date().toISOString(),
+                });
+              }
+            }
+            return newClients.length > 0 ? [...newClients, ...prevClients] : prevClients;
+          });
+        }
       }
     } catch (err) {
       console.error("Failed to load leads:", err);
@@ -217,12 +291,51 @@ export default function AdminDashboardPage() {
     return matchesScore && matchesSearch;
   });
 
+  // Automation Rule Handlers
+  const handleConvertMeetingToProposal = (meeting: Meeting) => {
+    const draft = convertMeetingToProposalDraft(meeting);
+    setProposals((prev) => [draft, ...prev]);
+
+    const te: TimelineEvent = {
+      id: `tl-${Date.now()}`,
+      client_id: draft.client_id,
+      event_type: "Proposal Sent",
+      event_title: "Proposal Generated from Discovery Call",
+      description: `Drafted technical proposal ${draft.proposal_id} (${draft.project_name}) for ₹${draft.cost.toLocaleString("en-IN")}.`,
+      created_at: new Date().toISOString(),
+    };
+    setTimelineEvents((prev) => [te, ...prev]);
+    setActiveTab("proposals");
+  };
+
+  const handleConvertToProject = (proposal: Proposal) => {
+    setProposals((prev) =>
+      prev.map((p) => (p.id === proposal.id ? { ...p, status: "Accepted" } : p))
+    );
+
+    const { project, timelineEvent } = convertProposalToProjectLifecycle(proposal);
+    setProjects((prev) => [project, ...prev]);
+    setTimelineEvents((prev) => [timelineEvent, ...prev]);
+    setActiveTab("projects");
+  };
+
+  const handleCompleteProject = (project: Project) => {
+    const { revenueRecord, timelineEvent } = completeProjectLifecycle(project);
+    setRevenues((prev) => [revenueRecord, ...prev]);
+    setTimelineEvents((prev) => [timelineEvent, ...prev]);
+  };
+
+  const handleAddTimelineEvent = (event: TimelineEvent) => {
+    setTimelineEvents((prev) => [event, ...prev]);
+  };
+
   const sidebarCounts = {
     leads: leads.length,
-    followups: followUps.filter((f) => f.status !== "Closed Won" && f.status !== "Closed Lost").length,
+    followups: followUps.filter((f) => f.status !== "Completed").length,
     activeProjects: projects.filter((p) => p.status === "Active").length,
     tasks: tasks.filter((t) => t.status !== "Completed").length,
-    meetings: meetings.filter((m) => m.status === "Scheduled").length,
+    meetings: meetings.filter((m) => (m.meeting_status || m.status) === "Scheduled").length,
+    proposals: proposals.filter((p) => p.status === "Sent" || p.status === "Draft").length,
   };
 
   if (!isAuthenticated) {
@@ -394,7 +507,7 @@ export default function AdminDashboardPage() {
               {filteredLeads.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-12 text-slate-500 text-sm">
-                    No leads found matching your criteria.
+                    {leads.length === 0 ? "No leads yet." : "No leads found matching your criteria."}
                   </td>
                 </tr>
               ) : (
@@ -614,22 +727,80 @@ export default function AdminDashboardPage() {
             )}
 
             {activeTab === "clients" && (
-              <ClientsModule clients={clients} communications={communications} />
+              <ClientsModule
+                clients={clients}
+                projects={projects}
+                meetings={meetings}
+                proposals={proposals}
+                revenues={revenues}
+                timelineEvents={timelineEvents}
+                communications={communications}
+                onAddTimelineEvent={handleAddTimelineEvent}
+              />
             )}
 
-            {activeTab === "projects" && <ProjectsModule projects={projects} />}
+            {activeTab === "proposals" && (
+              <ProposalsModule
+                proposals={proposals}
+                clients={clients}
+                onUpdateProposal={(upd) =>
+                  setProposals(proposals.map((p) => (p.id === upd.id ? upd : p)))
+                }
+                onCreateProposal={(created) => setProposals([created, ...proposals])}
+                onConvertToProject={handleConvertToProject}
+              />
+            )}
+
+            {activeTab === "projects" && (
+              <ProjectsModule
+                projects={projects}
+                onCompleteProject={handleCompleteProject}
+                onUpdateProject={(upd) =>
+                  setProjects(projects.map((p) => (p.id === upd.id ? upd : p)))
+                }
+              />
+            )}
 
             {activeTab === "revenue" && <RevenueModule revenues={revenues} />}
 
-            {activeTab === "meetings" && <MeetingsModule meetings={meetings} />}
+            {activeTab === "meetings" && (
+              <MeetingsModule
+                meetings={meetings}
+                onConvertToProposal={handleConvertMeetingToProposal}
+                onUpdateMeeting={(upd) =>
+                  setMeetings(meetings.map((m) => (m.id === upd.id ? upd : m)))
+                }
+              />
+            )}
 
-            {activeTab === "tasks" && <TasksModule tasks={tasks} />}
+            {activeTab === "tasks" && (
+              <TasksModule
+                tasks={tasks}
+                onUpdateTask={(upd) =>
+                  setTasks(tasks.map((t) => (t.id === upd.id ? upd : t)))
+                }
+                onCreateTask={(created) => setTasks([created, ...tasks])}
+                onDeleteTask={(id) => setTasks(tasks.filter((t) => t.id !== id))}
+              />
+            )}
+
+            {activeTab === "assistant" && (
+              <RioBusinessAssistant
+                projects={projects}
+                meetings={meetings}
+                proposals={proposals}
+                revenues={revenues}
+                followUps={followUps}
+                hotLeadsCount={hotLeads}
+              />
+            )}
 
             {activeTab === "analytics" && (
               <AnalyticsModule
                 leadCount={leads.length}
                 hotLeadCount={hotLeads}
                 projectCount={projects.length}
+                revenueTotal={revenues.filter((r) => r.status === "Paid").reduce((sum, r) => sum + r.amount, 0)}
               />
             )}
 
@@ -650,6 +821,7 @@ export default function AdminDashboardPage() {
           projects={projects}
           tasks={tasks}
           meetings={meetings}
+          proposals={proposals}
         />
 
         {/* Lead Detail Drawer / Modal (Preserved verbatim) */}
