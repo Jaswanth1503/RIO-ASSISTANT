@@ -51,17 +51,20 @@ export async function POST(req: NextRequest) {
       }\n\nRIO will dial the client phone directly.`
     )}&add=annujaswanth15@gmail.com,${encodeURIComponent(email)}`;
 
-    // 1. Save Lead Record in Dashboard
-    const lead = await saveLead({
-      name,
-      email,
-      phone,
-      business_name: company,
-      project_type: topic || "Consultation Call",
-      requirements: `Scheduled Direct AI Call for: ${date || "Upcoming"} at ${time || "Morning"}. Phone: ${phone || "None"}. Notes: ${notes || ""}`,
-      timeline: "AI Consultation Call Dispatched",
-      lead_score: "HOT",
-    });
+    // 1. Save Lead Record in Dashboard (skip generic lead email, dedicated alert sent below)
+    const lead = await saveLead(
+      {
+        name,
+        email,
+        phone,
+        business_name: company,
+        project_type: topic || "Consultation Call",
+        requirements: `Scheduled Direct AI Call for: ${date || "Upcoming"} at ${time || "Morning"}. Phone: ${phone || "None"}. Notes: ${notes || ""}`,
+        timeline: "AI Consultation Call Dispatched",
+        lead_score: "HOT",
+      },
+      { skipEmailNotification: true }
+    );
 
     // 2. Automate Lifecycle: Generate Meeting Record, Client Record, and Timeline Events
     const lifecycle = scheduleCallLifecycle({
@@ -122,8 +125,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Dispatch Emails to BOTH Annu Jaswanth and the Client
-    await Promise.allSettled([
+    // 3. Dispatch Emails to BOTH Annu Jaswanth and the Client concurrently
+    const [adminResult, clientResult] = await Promise.allSettled([
       sendAdminCallAlertEmail({
         name,
         email,
@@ -145,6 +148,13 @@ export async function POST(req: NextRequest) {
       }),
     ]);
 
+    const adminEmailSuccess = adminResult.status === "fulfilled" && adminResult.value.success;
+    const clientEmailSuccess = clientResult.status === "fulfilled" && clientResult.value.success;
+
+    console.log(
+      `[Calendar Booking] Email dispatch result - Admin Alert: ${adminEmailSuccess ? "Sent" : "Failed"}, Client Confirmation: ${clientEmailSuccess ? "Sent" : "Failed"}`
+    );
+
     // 4. Trigger Autonomous AI Phone Call via RIO (Vapi) if phone number provided
     let callDispatched = false;
     let callId: string | undefined;
@@ -164,6 +174,10 @@ export async function POST(req: NextRequest) {
       googleCalendarUrl: gcalUrl,
       callDispatched,
       callId,
+      emailStatus: {
+        adminAlert: adminResult.status === "fulfilled" ? adminResult.value : { success: false, error: "Rejected" },
+        clientConfirmation: clientResult.status === "fulfilled" ? clientResult.value : { success: false, error: "Rejected" },
+      },
       meetingDetails: {
         host: "RIO (AI Representative for Annu Jaswanth)",
         attendee: name,

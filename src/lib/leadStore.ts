@@ -13,7 +13,10 @@ if (!globalForLeads.__rio_mock_leads) {
 }
 const mockLeads: Lead[] = globalForLeads.__rio_mock_leads;
 
-export async function saveLead(rawLead: Partial<Lead>): Promise<Lead> {
+export async function saveLead(
+  rawLead: Partial<Lead>,
+  options?: { skipEmailNotification?: boolean }
+): Promise<Lead> {
   // Score the lead using the qualification engine
   const scoreResult = evaluateLeadScore(rawLead);
   const leadScore = rawLead.lead_score || scoreResult.score;
@@ -54,10 +57,12 @@ export async function saveLead(rawLead: Partial<Lead>): Promise<Lead> {
   }
 
   // 2. Automated Email Alert to Annu (Phase 6)
-  try {
-    await sendLeadNotificationEmail(leadToSave);
-  } catch (emailErr) {
-    console.error("Error triggering Resend email:", emailErr);
+  if (!options?.skipEmailNotification) {
+    try {
+      await sendLeadNotificationEmail(leadToSave);
+    } catch (emailErr) {
+      console.error("Error triggering Resend email:", emailErr);
+    }
   }
 
   // 3. Automated Vapi Call Trigger if HOT lead with phone (Phase 10)

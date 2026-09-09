@@ -23,16 +23,19 @@ export async function POST(req: NextRequest) {
     const meetingDate = date || new Date().toISOString().split("T")[0];
     const meetingTime = time || "Immediate / Scoping Call";
 
-    // 1. Save Lead into database / local store
-    const lead = await saveLead({
-      name,
-      email,
-      phone: phone || "",
-      project_type: projectTopic,
-      requirements: projectDesc,
-      timeline: "Inbound Contact Form Submission",
-      lead_score: phone ? "HOT" : "WARM",
-    });
+    // 1. Save Lead into database / local store (skip generic lead email, dedicated alert sent below)
+    const lead = await saveLead(
+      {
+        name,
+        email,
+        phone: phone || "",
+        project_type: projectTopic,
+        requirements: projectDesc,
+        timeline: "Inbound Contact Form Submission",
+        lead_score: phone ? "HOT" : "WARM",
+      },
+      { skipEmailNotification: true }
+    );
 
     // 2. Automate lifecycle creation (client, meeting, timeline events)
     const lifecycle = scheduleCallLifecycle({
@@ -79,7 +82,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Trigger dual email notifications
-    await Promise.allSettled([
+    const [adminResult, clientResult] = await Promise.allSettled([
       sendAdminCallAlertEmail({
         name,
         email,
@@ -103,7 +106,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "Your inquiry has been received. Confirmation email sent.",
+      message: "Your inquiry has been received. Confirmation email dispatched.",
+      emailStatus: {
+        adminAlert: adminResult.status === "fulfilled" ? adminResult.value : { success: false },
+        clientConfirmation: clientResult.status === "fulfilled" ? clientResult.value : { success: false },
+      },
       lead,
     });
   } catch (err: any) {

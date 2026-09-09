@@ -24,6 +24,7 @@ import {
   PhoneCall,
   Columns,
   List,
+  Menu,
 } from "lucide-react";
 import { Lead } from "@/lib/validations";
 import AdminSidebar, { AdminTab } from "@/components/admin/AdminSidebar";
@@ -113,6 +114,10 @@ export default function AdminDashboardPage() {
         .catch(() => {});
     }
     fetchLeads();
+
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setIsSidebarCollapsed(true);
+    }
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -604,18 +609,27 @@ export default function AdminDashboardPage() {
         <div>
           {/* Top Bar (Preserved and Enhanced with Notification Center and Global Search) */}
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between pb-8 border-b border-slate-800 gap-4">
-            <div>
-              <div className="flex items-center space-x-3">
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                  RIO <span className="gradient-text-green">Executive Lead Center</span>
-                </h1>
-                <span className="flex items-center text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-full font-medium">
-                  <ShieldCheck className="w-3.5 h-3.5 mr-1" /> Live Sync
-                </span>
+            <div className="flex items-start space-x-3">
+              <button
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                className="sm:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white shrink-0 mt-0.5"
+                title="Toggle Sidebar Menu"
+              >
+                <Menu className="w-4 h-4" />
+              </button>
+              <div>
+                <div className="flex items-center space-x-3">
+                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                    RIO <span className="gradient-text-green">Executive Lead Center</span>
+                  </h1>
+                  <span className="flex items-center text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-full font-medium">
+                    <ShieldCheck className="w-3.5 h-3.5 mr-1" /> Live Sync
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                  Real-time qualified pipeline for Annu Jaswanth • Notifications routed to <span className="text-slate-300">annujaswanth15@gmail.com</span>
+                </p>
               </div>
-              <p className="text-xs sm:text-sm text-slate-400 mt-1">
-                Real-time qualified pipeline for Annu Jaswanth • Notifications routed to <span className="text-slate-300">annujaswanth15@gmail.com</span>
-              </p>
             </div>
 
             <div className="flex items-center space-x-2.5">

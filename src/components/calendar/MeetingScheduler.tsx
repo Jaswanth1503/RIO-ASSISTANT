@@ -123,11 +123,15 @@ export default function MeetingScheduler() {
             </div>
             <div className="flex justify-between items-center pt-2.5 border-t border-slate-800">
               <span className="text-slate-400 flex items-center"><Mail className="w-3.5 h-3.5 mr-1.5 text-teal-400" /> Client Confirmation:</span>
-              <span className="text-slate-200 font-medium">{email} (Dispatched)</span>
+              <span className={`font-medium ${bookingSuccess.emailStatus?.clientConfirmation?.success ? "text-emerald-400" : "text-slate-200"}`}>
+                {email} {bookingSuccess.emailStatus?.clientConfirmation?.success ? "(Sent to Inbox)" : "(Dispatched)"}
+              </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-400 flex items-center"><Mail className="w-3.5 h-3.5 mr-1.5 text-teal-400" /> Annu&apos;s Direct Alert:</span>
-              <span className="text-slate-200 font-medium">annujaswanth15@gmail.com (Dispatched)</span>
+              <span className={`font-medium ${bookingSuccess.emailStatus?.adminAlert?.success ? "text-emerald-400" : "text-slate-200"}`}>
+                annujaswanth15@gmail.com {bookingSuccess.emailStatus?.adminAlert?.success ? "(Sent to Inbox)" : "(Dispatched)"}
+              </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-400 flex items-center"><CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-emerald-400" /> Dashboard Record:</span>

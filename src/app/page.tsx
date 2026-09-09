@@ -24,11 +24,15 @@ import {
   Truck,
   Leaf,
   Calendar,
+  Lock,
+  Menu,
+  X,
 } from "lucide-react";
 import MeetingScheduler from "@/components/calendar/MeetingScheduler";
 
 export default function HomePage() {
   const [selectedService, setSelectedService] = useState<string>("ai-agent");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   const openRioWithPrompt = (prompt: string) => {
     // Dispatch custom event to RIO widget or open chat
@@ -77,19 +81,31 @@ export default function HomePage() {
             </a>
             <a
               href="/admin"
-              className="text-slate-500 hover:text-slate-300 transition-colors"
+              className="text-slate-400 hover:text-emerald-400 transition-colors flex items-center space-x-1"
               title="Admin Lead Center"
             >
-              Portal
+              <Lock className="w-3 h-3 text-emerald-400" />
+              <span>Portal</span>
             </a>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            {/* Direct Portal Login Button - Visible on Both Mobile and Desktop */}
+            <a
+              href="/admin"
+              className="inline-flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 hover:border-emerald-500/50 text-slate-200 hover:text-emerald-400 transition-all shadow-sm"
+              title="Admin Portal Login"
+            >
+              <Lock className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-xs font-bold">Portal</span>
+            </a>
+
             <a
               href="https://github.com/Jaswanth1503"
               target="_blank"
               rel="noopener noreferrer"
               className="text-slate-400 hover:text-slate-200 p-2 transition-colors"
+              title="GitHub"
             >
               <Github className="w-4 h-4" />
             </a>
@@ -98,9 +114,11 @@ export default function HomePage() {
               target="_blank"
               rel="noopener noreferrer"
               className="text-slate-400 hover:text-slate-200 p-2 transition-colors"
+              title="LinkedIn"
             >
               <Linkedin className="w-4 h-4" />
             </a>
+
             <a
               href="#book-call"
               className="hidden sm:inline-flex items-center space-x-2 text-xs font-bold px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-lg hover:shadow-emerald-500/25"
@@ -108,8 +126,93 @@ export default function HomePage() {
               <span>Schedule Call</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </a>
+
+            {/* Mobile Hamburger Menu Button */}
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition-colors"
+              aria-label="Toggle navigation menu"
+            >
+              {isMobileMenuOpen ? (
+                <X className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Menu className="w-4 h-4" />
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Drawer */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden border-b border-slate-800 bg-slate-950/98 backdrop-blur-xl px-4 py-4 space-y-3 shadow-2xl animate-fade-in">
+            <div className="grid grid-cols-2 gap-2 text-xs font-medium text-slate-300">
+              <a
+                href="#projects"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/30 hover:text-emerald-400 transition-all flex items-center space-x-2"
+              >
+                <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Projects</span>
+              </a>
+              <a
+                href="#services"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/30 hover:text-emerald-400 transition-all flex items-center space-x-2"
+              >
+                <Zap className="w-3.5 h-3.5 text-teal-400" />
+                <span>Services</span>
+              </a>
+              <a
+                href="#pricing"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/30 hover:text-emerald-400 transition-all flex items-center space-x-2"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Pricing Guide</span>
+              </a>
+              <a
+                href="#stack"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/30 hover:text-emerald-400 transition-all flex items-center space-x-2"
+              >
+                <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Tech Stack</span>
+              </a>
+            </div>
+
+            {/* Direct Admin Portal Card in Mobile Menu */}
+            <a
+              href="/admin"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 border border-emerald-500/30 text-slate-200 hover:text-white transition-all shadow-md group"
+            >
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-100 flex items-center space-x-1.5">
+                    <span>Admin Portal Login</span>
+                    <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.2 rounded border border-emerald-500/30 font-bold">
+                      ADMIN
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400">Leads, calls, pipeline & telemetry</div>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-emerald-400 group-hover:translate-x-1 transition-transform" />
+            </a>
+
+            <a
+              href="#book-call"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-emerald-500/20"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Schedule Strategy Call</span>
+            </a>
+          </div>
+        )}
       </nav>
 
       {/* Hero Section */}
@@ -666,8 +769,12 @@ export default function HomePage() {
             <a href="https://www.linkedin.com/in/annu-jaswanth-88aa4033b/" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-400 transition-colors">
               LinkedIn
             </a>
-            <a href="/admin" className="text-slate-500 hover:text-slate-300">
-              Admin
+            <a
+              href="/admin"
+              className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 text-emerald-400 hover:text-emerald-300 hover:border-emerald-500/40 font-semibold transition-all"
+            >
+              <Lock className="w-3 h-3" />
+              <span>Portal Login</span>
             </a>
           </div>
         </div>

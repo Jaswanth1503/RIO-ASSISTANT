@@ -19,6 +19,8 @@ export default function SettingsModule() {
   const [email, setEmail] = useState("annujaswanth15@gmail.com");
   const [passcode, setPasscode] = useState("");
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [emailTestResult, setEmailTestResult] = useState<any>(null);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +64,7 @@ export default function SettingsModule() {
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 focus:outline-none focus:border-emerald-500"
               />
               <span className="text-[11px] text-slate-500 mt-1 block">
-                Instant HTML emails for all HOT/WARM leads are dispatched here via Resend.
+                Instant HTML emails for all HOT/WARM leads and client confirmations are routed through this system.
               </span>
             </div>
 
@@ -82,14 +84,81 @@ export default function SettingsModule() {
               </span>
             </div>
 
-            <button
-              type="submit"
-              className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center space-x-2 shadow-lg transition-all"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>Save Preferences</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <button
+                type="submit"
+                className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center space-x-2 shadow-lg transition-all"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Save Preferences</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsTestingEmail(true);
+                  setEmailTestResult(null);
+                  try {
+                    const res = await fetch("/api/admin/email-status", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ testEmail: email }),
+                    });
+                    const data = await res.json();
+                    setEmailTestResult(data);
+                  } catch (err: any) {
+                    setEmailTestResult({ success: false, error: err.message || "Failed to reach server" });
+                  } finally {
+                    setIsTestingEmail(false);
+                  }
+                }}
+                disabled={isTestingEmail}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 font-semibold text-xs flex items-center space-x-2 transition-all disabled:opacity-50"
+              >
+                <Mail className="w-3.5 h-3.5 text-teal-400" />
+                <span>{isTestingEmail ? "Verifying & Sending Test..." : "Send Test Diagnostic Email"}</span>
+              </button>
+            </div>
           </form>
+
+          {emailTestResult && (
+            <div
+              className={`p-3.5 rounded-xl border text-xs space-y-1 animate-fade-in ${
+                emailTestResult.success
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                  : "bg-red-500/10 border-red-500/30 text-red-300"
+              }`}
+            >
+              <div className="font-bold flex items-center space-x-1.5">
+                {emailTestResult.success ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Email Delivered Successfully! Check your inbox ({emailTestResult.targetEmail}).</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                    <span>Email Dispatch Issue Detected</span>
+                  </>
+                )}
+              </div>
+              {emailTestResult.result?.provider && (
+                <div className="text-[11px] opacity-80">
+                  Provider: <strong>{emailTestResult.result.provider.toUpperCase()}</strong> | Message ID: {emailTestResult.result.messageId}
+                </div>
+              )}
+              {emailTestResult.result?.error && (
+                <div className="text-[11px] text-red-400 mt-1 font-mono">
+                  {emailTestResult.result.error}
+                </div>
+              )}
+              {!emailTestResult.success && (
+                <div className="text-[11px] text-amber-300/90 mt-1 pt-1 border-t border-red-500/20">
+                  💡 <strong>Tip for Vercel:</strong> Ensure you have added <code>SMTP_HOST</code>, <code>SMTP_USER</code>, and <code>SMTP_PASS</code> in your Vercel Project Settings &gt; Environment Variables.
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* System Architecture Status */}

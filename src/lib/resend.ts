@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import { Lead } from "./validations";
 
 interface SendMailPayload {
@@ -42,21 +42,29 @@ function getEmailEnv() {
   };
 }
 
-/**
- * Core email sender with dual-transport (SMTP + Resend), retries, and comprehensive error logging.
- */
-export async function dispatchEmailWithRetry(
-  payload: SendMailPayload,
-  maxRetries = 2
-): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const env = getEmailEnv();
-  let lastError = "";
+// Cached pooled transporter for high throughput & fast serverless execution
+let cachedTransporter: Transporter | null = null;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    // Strategy 1: Attempt SMTP if configured
-    if (env.isSmtpConfigured) {
-      try {
-        const transporter = nodemailer.createTransport({
+function getSmtpTransporter(env: ReturnType<typeof getEmailEnv>): Transporter {
+  if (cachedTransporter) return cachedTransporter;
+
+  const isGmail = env.smtpHost.toLowerCase().includes("gmail");
+  cachedTransporter = nodemailer.createTransport(
+    isGmail
+      ? {
+          service: "gmail",
+          auth: {
+            user: env.smtpUser,
+            pass: env.smtpPass,
+          },
+          pool: true,
+          maxConnections: 3,
+          maxMessages: 50,
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          socketTimeout: 10000,
+        }
+      : {
           host: env.smtpHost,
           port: env.smtpPort,
           secure: env.smtpSecure,
@@ -64,7 +72,48 @@ export async function dispatchEmailWithRetry(
             user: env.smtpUser,
             pass: env.smtpPass,
           },
-        });
+          pool: true,
+          maxConnections: 3,
+          maxMessages: 50,
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          socketTimeout: 10000,
+          tls: {
+            rejectUnauthorized: false,
+          },
+        }
+  );
+  return cachedTransporter;
+}
+
+export function getEmailConfigStatus() {
+  const env = getEmailEnv();
+  return {
+    recipientEmail: env.recipientEmail,
+    isSmtpConfigured: env.isSmtpConfigured,
+    smtpUser: env.smtpUser ? `${env.smtpUser.slice(0, 3)}***@${env.smtpUser.split("@")[1] || ""}` : "Not set",
+    smtpHost: env.smtpHost || "Not set",
+    isResendConfigured: env.isResendConfigured,
+    resendFromEmail: env.resendFromEmail,
+    ready: env.isSmtpConfigured || env.isResendConfigured,
+  };
+}
+
+/**
+ * Core email sender with dual-transport (SMTP + Resend), retries, and comprehensive error logging.
+ */
+export async function dispatchEmailWithRetry(
+  payload: SendMailPayload,
+  maxRetries = 2
+): Promise<{ success: boolean; messageId?: string; error?: string; provider?: string }> {
+  const env = getEmailEnv();
+  let lastError = "";
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // Strategy 1: Attempt SMTP if configured (Allows sending to ANY client or owner without domain sandbox restrictions)
+    if (env.isSmtpConfigured) {
+      try {
+        const transporter = getSmtpTransporter(env);
 
         const info = await transporter.sendMail({
           from: payload.from || env.smtpFrom,
@@ -77,10 +126,12 @@ export async function dispatchEmailWithRetry(
         console.log(
           `[Email Dispatcher - SMTP Success] Email delivered to ${payload.to} (MessageID: ${info.messageId})`
         );
-        return { success: true, messageId: info.messageId };
+        return { success: true, messageId: info.messageId, provider: "smtp" };
       } catch (smtpErr: any) {
         lastError = `SMTP error (attempt ${attempt}): ${smtpErr?.message || smtpErr}`;
         console.error(`[Email Dispatcher - SMTP Failed]`, smtpErr);
+        // Reset cached transporter on failure so next attempt gets a fresh connection
+        cachedTransporter = null;
       }
     }
 
@@ -99,20 +150,25 @@ export async function dispatchEmailWithRetry(
           lastError = `Resend error (attempt ${attempt}): ${error.message || JSON.stringify(error)}`;
           console.error(`[Email Dispatcher - Resend Error] To: ${payload.to} | Error:`, error);
           // If Resend test domain restriction (cannot send to unverified third-party addresses on free tier)
-          if (error.message && error.message.includes("testing emails to your own email address")) {
+          if (
+            error.message &&
+            (error.message.includes("testing emails to your own email address") ||
+              error.message.includes("verify a domain"))
+          ) {
             console.warn(
-              `[Resend Notice] Resend test domain (onboarding@resend.dev) can only deliver to the account owner (${env.recipientEmail}). To send to client emails (${payload.to}), verify your custom domain on resend.com/domains.`
+              `[Resend Notice] Resend test domain (onboarding@resend.dev) can only deliver to the account owner (${env.recipientEmail}). To send to client emails (${payload.to}), either verify your custom domain on resend.com/domains or configure SMTP.`
             );
             return {
               success: false,
-              error: `Resend test domain restricted to account owner (${env.recipientEmail}). Verify your custom domain to email clients directly.`,
+              error: `Resend test domain restricted to account owner (${env.recipientEmail}). Verify your custom domain or configure Gmail SMTP in Vercel.`,
+              provider: "resend",
             };
           }
         } else if (data?.id) {
           console.log(
             `[Email Dispatcher - Resend Success] Live email dispatched to ${payload.to} (ID: ${data.id})`
           );
-          return { success: true, messageId: data.id };
+          return { success: true, messageId: data.id, provider: "resend" };
         }
       } catch (resendErr: any) {
         lastError = `Resend exception (attempt ${attempt}): ${resendErr?.message || resendErr}`;
@@ -122,29 +178,30 @@ export async function dispatchEmailWithRetry(
 
     // Wait before next retry attempt
     if (attempt < maxRetries) {
-      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
     }
   }
 
   // If neither provider is configured in environment
   if (!env.isResendConfigured && !env.isSmtpConfigured) {
     const errorMsg =
-      "Neither RESEND_API_KEY nor SMTP_HOST/SMTP_USER/SMTP_PASS is configured in .env.local.";
+      "Neither SMTP (SMTP_HOST/SMTP_USER/SMTP_PASS) nor RESEND_API_KEY is configured in server environment variables.";
     console.warn(`\n[EMAIL AUDIT WARNING] ${errorMsg}`);
     console.warn(`[EMAIL AUDIT ACTION REQUIRED]`);
-    console.warn(`  To enable live emails, add either:`);
-    console.warn(`    1. RESEND_API_KEY=re_your_api_key`);
-    console.warn(`    2. SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=..., SMTP_PASS=...\n`);
-
-    // Log payload in console so nothing is lost during testing
-    console.log(`[DISPATCH SIMULATION - PENDING CREDENTIALS]`);
-    console.log(`To: ${payload.to} | Subject: ${payload.subject}`);
-    console.log(`====================================================\n`);
+    console.warn(`  To enable live email delivery on Vercel/Production, add to Vercel Environment Variables:`);
+    console.warn(`    SMTP_HOST=smtp.gmail.com`);
+    console.warn(`    SMTP_PORT=465`);
+    console.warn(`    SMTP_SECURE=true`);
+    console.warn(`    SMTP_USER=annujaswanth15@gmail.com`);
+    console.warn(`    SMTP_PASS=ocnceylylkkuopcq`);
+    console.warn(`    SMTP_FROM=Annu Jaswanth <annujaswanth15@gmail.com>`);
+    console.warn(`    NOTIFICATION_EMAIL=annujaswanth15@gmail.com\n`);
 
     return {
-      success: true, // Marked true to not block client UI during setup, but warning emitted
-      messageId: "sim-credentials-pending",
+      success: false,
+      messageId: "credentials-pending",
       error: errorMsg,
+      provider: "none",
     };
   }
 
@@ -292,7 +349,7 @@ Submission Time: ${submissionTime}
 
   return dispatchEmailWithRetry({
     to: process.env.NOTIFICATION_EMAIL || "annujaswanth15@gmail.com",
-    subject: "NEW LEAD - RIO",
+    subject: `NEW LEAD - RIO: ${params.name} (${params.topic || "AI / Full-Stack"})`,
     html: emailHtml,
     text: emailText,
   });
